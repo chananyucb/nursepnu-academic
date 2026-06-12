@@ -1,5 +1,6 @@
 /* =====================================================================
    supabase-config.js — กรอก URL และ Key จาก Supabase Dashboard
+   Settings → API → Project URL  และ  anon / public key
    ===================================================================== */
-window.SUPABASE_URL      = 'https://gllqjxslxjmctugrjtaj.supabase.co';
-window.SUPABASE_ANON_KEY = 'sb_publishable_A5TntPTnQO37LFhLUVGFZw_QDGoRcR3';
+window.SUPABASE_URL      = 'PASTE_YOUR_PROJECT_URL_HERE';
+window.SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
