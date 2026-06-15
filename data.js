@@ -1,85 +1,255 @@
 /* ===================================================================
-   Sample data — Academic Service Projects
-   Faculty of Nursing, Princess of Naradhiwas University (2563–2570)
-   Figures in THB. remaining is computed = (budget + income) - actual
+   charts.jsx — custom animated SVG/CSS charts
+   GroupedBarChart · DonutChart · LineChart · Sparkline
 =================================================================== */
-(function () {
-  // Project categories — single type: Academic Service
-  const CATEGORIES = {
-    academic: { key: 'academic', name: 'งานบริการวิชาการ', color: '#0e5c4a' },
-  };
 
-  const OWNERS = [
-    'ผศ.ดร.นูรียะห์ สาและ',
-    'อ.ดร.ฮัสนีย์ เจ๊ะเลาะ',
-    'ผศ.สุไวบ๊ะ กาเดร์',
-    'อ.ฟาตีฮะห์ อับดุลเลาะ',
-    'ดร.รอฮานา ดาคาเฮง',
-    'อ.มัรยานี สาเมาะ',
-    'ผศ.ดร.อานีตา หะยีเจะอุมา',
-    'อ.ซูไฮลา ยูโซ๊ะ',
-  ];
-
-  // raw rows: [year, name, cat, duration, target, recipients, budget, income, actual, ownerIdx, status]
-  const rows = [
-    [2563, 'อบรมการช่วยฟื้นคืนชีพขั้นพื้นฐาน (CPR) สำหรับประชาชนทั่วไป', 'academic', 'ม.ค. – มี.ค. 2563', 'ประชาชนและแกนนำสุขภาพ อ.เมือง', 120, 85000, 20000, 92400, 0, 'done'],
-    [2563, 'ส่งเสริมสุขภาพผู้สูงอายุในชุมชนตำบลโคกเคียน', 'academic', 'ก.พ. – ส.ค. 2563', 'ผู้สูงอายุติดสังคม 60 ปีขึ้นไป', 180, 120000, 0, 113200, 5, 'done'],
-    [2563, 'คัดกรองโรคเบาหวานและความดันโลหิตสูงในชุมชน', 'academic', 'มี.ค. – ก.ย. 2563', 'ประชาชนกลุ่มเสี่ยง 35 ปีขึ้นไป', 340, 95000, 35000, 121800, 2, 'done'],
-
-    [2564, 'พัฒนาศักยภาพอาสาสมัครสาธารณสุขประจำหมู่บ้าน (อสม.)', 'academic', 'พ.ย. 2563 – เม.ย. 2564', 'อสม. ในเขตอำเภอเมืองนราธิวาส', 95, 110000, 25000, 104500, 6, 'done'],
-    [2564, 'ดูแลสุขภาพมารดาและทารกหลังคลอดในชุมชน', 'academic', 'ม.ค. – มิ.ย. 2564', 'มารดาหลังคลอดและทารก', 88, 78000, 15000, 80100, 3, 'done'],
-    [2564, 'ป้องกันและควบคุมโรคไข้เลือดออกแบบมีส่วนร่วม', 'academic', 'พ.ค. – ก.ย. 2564', 'ครัวเรือนในพื้นที่เสี่ยง', 520, 65000, 0, 58900, 5, 'done'],
-    [2564, 'เสริมสร้างสุขภาพจิตและป้องกันภาวะซึมเศร้าในวัยรุ่น', 'academic', 'ก.ค. – ธ.ค. 2564', 'นักเรียนมัธยมศึกษาตอนปลาย', 260, 70000, 10000, 67400, 7, 'done'],
-
-    [2565, 'อบรมการดูแลผู้ป่วยติดเตียงสำหรับผู้ดูแลในครอบครัว', 'academic', 'ธ.ค. 2564 – พ.ค. 2565', 'ผู้ดูแลผู้ป่วยติดเตียง (Caregiver)', 75, 95000, 30000, 101200, 0, 'done'],
-    [2565, 'รณรงค์สุขภาพช่องปากในเด็กก่อนวัยเรียน', 'academic', 'ก.พ. – ส.ค. 2565', 'เด็กก่อนวัยเรียนและผู้ปกครอง', 410, 60000, 12000, 64300, 4, 'done'],
-    [2565, 'พัฒนาความรอบรู้ด้านสุขภาพ (Health Literacy) ในชุมชนพหุวัฒนธรรม', 'academic', 'มี.ค. – ก.ย. 2565', 'แกนนำชุมชนและประชาชนทั่วไป', 300, 135000, 40000, 142700, 6, 'done'],
-    [2565, 'ส่งเสริมสุขภาพและป้องกันการหกล้มในผู้สูงอายุ', 'academic', 'พ.ค. – พ.ย. 2565', 'ผู้สูงอายุกลุ่มเสี่ยงหกล้ม', 210, 88000, 18000, 90500, 1, 'done'],
-
-    [2566, 'อบรมปฐมพยาบาลเบื้องต้นและการใช้ AED ในโรงเรียน', 'academic', 'พ.ย. 2565 – มี.ค. 2566', 'ครูและนักเรียนแกนนำ 12 โรงเรียน', 240, 105000, 28000, 99800, 0, 'done'],
-    [2566, 'ดูแลสุขภาพผู้ป่วยเบาหวานเพื่อป้องกันภาวะแทรกซ้อน', 'academic', 'ม.ค. – ส.ค. 2566', 'ผู้ป่วยเบาหวานในคลินิกชุมชน', 165, 125000, 35000, 130400, 2, 'done'],
-    [2566, 'ป้องกันการตั้งครรภ์ไม่พร้อมในวัยรุ่น', 'academic', 'มี.ค. – ก.ย. 2566', 'เยาวชนและนักเรียนวัยรุ่น', 380, 72000, 14000, 70200, 7, 'done'],
-    [2566, 'เฝ้าระวังและควบคุมโรคติดต่อในแรงงานข้ามชาติ', 'academic', 'มิ.ย. – ธ.ค. 2566', 'แรงงานข้ามชาติและครอบครัว', 290, 98000, 22000, 95100, 5, 'done'],
-
-    [2567, 'ส่งเสริมสุขภาพแบบองค์รวมในชุมชนต้นแบบ', 'academic', 'พ.ย. 2566 – มิ.ย. 2567', 'ประชาชนในชุมชนต้นแบบ 3 ตำบล', 450, 160000, 50000, 168900, 4, 'done'],
-    [2567, 'พัฒนาเครือข่ายการดูแลผู้สูงอายุระยะยาว (Long Term Care)', 'academic', 'ม.ค. – ก.ย. 2567', 'ผู้จัดการดูแลและ Caregiver', 130, 145000, 45000, 138600, 6, 'done'],
-    [2567, 'ดูแลสุขภาพจิตและฟื้นฟูผู้ได้รับผลกระทบจากเหตุการณ์ความไม่สงบ', 'academic', 'เม.ย. – ธ.ค. 2567', 'ครอบครัวผู้ได้รับผลกระทบ', 110, 118000, 20000, 109300, 3, 'done'],
-
-    [2568, 'ส่งเสริมโภชนาการและพัฒนาการเด็กปฐมวัย', 'academic', 'ธ.ค. 2567 – ก.ค. 2568', 'เด็กปฐมวัยและผู้ปกครองในศูนย์เด็กเล็ก', 320, 112000, 30000, 78400, 4, 'active'],
-    [2568, 'อบรมการดูแลผู้ป่วยระยะประคับประคอง (Palliative Care) ในชุมชน', 'academic', 'ก.พ. – ก.ย. 2568', 'ทีมสุขภาพและผู้ดูแลในชุมชน', 90, 138000, 42000, 96500, 0, 'active'],
-    [2568, 'รณรงค์ป้องกันโรคไม่ติดต่อเรื้อรัง (NCDs) เชิงรุก', 'academic', 'มี.ค. – ต.ค. 2568', 'ประชาชนกลุ่มเสี่ยงในเขตเทศบาล', 600, 92000, 18000, 41200, 2, 'active'],
-
-    [2569, 'พัฒนานวัตกรรมการพยาบาลชุมชนด้วยเทคโนโลยีดิจิทัล', 'academic', 'ต.ค. 2568 – มิ.ย. 2569', 'พยาบาลชุมชนและ อสม.', 80, 175000, 60000, 0, 6, 'plan'],
-    [2569, 'ส่งเสริมสุขภาพจิตเชิงบวกในสถานศึกษา', 'academic', 'ม.ค. – ส.ค. 2569', 'นักเรียนและบุคลากรทางการศึกษา', 400, 95000, 25000, 0, 7, 'plan'],
-
-    [2570, 'ศูนย์เรียนรู้การดูแลสุขภาพชุมชนพหุวัฒนธรรมชายแดนใต้', 'academic', 'ต.ค. 2569 – ก.ย. 2570', 'เครือข่ายสุขภาพชายแดนใต้', 250, 220000, 80000, 0, 0, 'plan'],
-  ];
-
-  let idc = 1000;
-  const projects = rows.map((r) => {
-    const [year, name, cat, duration, target, recipients, budget, income, actual, ownerIdx, status] = r;
-    const deductUniversity = Math.round(income * 0.10);
-    const deductFaculty    = Math.round((income - deductUniversity) * 0.20);
-    const remaining = budget + income - deductUniversity - deductFaculty - actual;
-    return {
-      id: 'PJ' + (++idc),
-      year, name, category: cat, duration, target,
-      recipients, budget, income,
-      deductUniversity, deductFaculty,
-      actual, remaining,
-      owner: OWNERS[ownerIdx], status,
+/* JS-driven reveal 0→1 (rAF + setTimeout fallback so geometry always
+   settles even when CSS transitions / rAF are throttled). No CSS
+   transitions are used for geometry, so charts never stick hidden. */
+function useReveal(dur = 1100) {
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    let raf, start, done = false;
+    const tick = (t) => {
+      if (!start) start = t;
+      const k = Math.min(1, (t - start) / dur);
+      setP(1 - Math.pow(1 - k, 3));
+      if (k < 1) raf = requestAnimationFrame(tick); else done = true;
     };
-  });
+    raf = requestAnimationFrame(tick);
+    const fb = setTimeout(() => { if (!done) setP(1); }, dur + 180);
+    return () => { cancelAnimationFrame(raf); clearTimeout(fb); };
+  }, []);
+  return p;
+}
 
-  window.NURSE_DATA = {
-    org: {
-      faculty: 'คณะพยาบาลศาสตร์',
-      university: 'มหาวิทยาลัยนราธิวาสราชนครินทร์',
-      short: 'NUR · PNU',
-      system: 'ระบบบริหารโครงการบริการวิชาการ',
-    },
-    categories: CATEGORIES,
-    owners: OWNERS,
-    projects,
-  };
-})();
+/* -------- Grouped bar chart (budget / income / actual by year) -------- */
+function GroupedBarChart({ data, height = 270, series: customSeries }) {
+  const reveal = useReveal(1000);
+  const [hover, setHover] = useState(null); // {gi, x, y}
+  const series = customSeries || [
+    { key: 'budget', name: 'เงินงบประมาณ', color: '#0e5c4a' },
+    { key: 'income', name: 'เงินรายได้',   color: '#c9a24b' },
+    { key: 'actual', name: 'ค่าใช้จ่ายจริง', color: '#43b596' },
+  ];
+  const max = Math.max(1, ...data.flatMap((d) => series.map((s) => d[s.key])));
+  // nice round ticks (always 0 at the bottom, never negative)
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const nt = Math.max(1, Math.round(top / step));
+  const ticks = Array.from({ length: nt + 1 }, (_, i) => top - step * i);
+
+  return (
+    <div className="bar-chart" style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 12 }}>
+        {/* y axis */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height, fontSize: 11, color: 'var(--ink-400)', textAlign: 'right', fontFamily: 'Kanit', minWidth: 38 }}>
+          {ticks.map((t, i) => <div key={i}>{fmtCompact(t)}</div>)}
+        </div>
+        {/* plot */}
+        <div style={{ position: 'relative', flex: 1, height }}>
+          {/* gridlines */}
+          {ticks.map((t, i) => (
+            <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: (i / nt) * 100 + '%', height: 1, background: i === nt ? 'var(--line)' : 'var(--line-soft)' }} />
+          ))}
+          {/* groups */}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', gap: '2%' }}>
+            {data.map((d, gi) => (
+              <div key={gi}
+                onMouseEnter={(e) => setHover({ gi })}
+                onMouseLeave={() => setHover(null)}
+                style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '7%', position: 'relative', borderRadius: 8, background: hover && hover.gi === gi ? 'rgba(28,148,118,.05)' : 'transparent', transition: 'background .2s' }}>
+                {series.map((s, si) => {
+                  const hpx = (d[s.key] / top) * height * reveal;
+                  return (
+                    <div key={s.key} style={{
+                      width: '26%', maxWidth: 26, height: hpx + 'px',
+                      background: `linear-gradient(180deg, ${s.color}, ${shade(s.color, -14)})`,
+                      borderRadius: '5px 5px 0 0',
+                      boxShadow: `0 4px 12px -4px ${s.color}66`,
+                    }} />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {/* tooltip */}
+          {hover && (
+            <div style={{ position: 'absolute', left: `${(hover.gi + 0.5) / data.length * 100}%`, top: -8, transform: 'translate(-50%,-100%)', background: 'var(--emerald-900)', color: '#eafaf4', borderRadius: 10, padding: '9px 12px', fontSize: 12, boxShadow: 'var(--shadow-md)', whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 5 }}>
+              <div style={{ fontFamily: 'Kanit', fontWeight: 600, marginBottom: 4 }}>ปีงบ {data[hover.gi].label}</div>
+              {series.map((s) => (
+                <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 7, margin: '2px 0' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 3, background: s.color }} />
+                  <span style={{ opacity: .8 }}>{s.name}</span>
+                  <span style={{ fontFamily: 'Kanit', fontWeight: 600, marginLeft: 'auto' }}>{fmtTHB(data[hover.gi][s.key])}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* x labels */}
+      <div style={{ display: 'flex', gap: '2%', marginLeft: 50, marginTop: 8 }}>
+        {data.map((d, i) => <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontFamily: 'Kanit', color: 'var(--ink-500)' }}>{d.label}</div>)}
+      </div>
+      {/* legend */}
+      <div className="legend" style={{ marginTop: 16, justifyContent: 'center' }}>
+        {series.map((s) => <div key={s.key} className="it"><span className="sw" style={{ background: s.color }} />{s.name}</div>)}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Donut chart -------- */
+function DonutChart({ slices, size = 200, thickness = 26, centerValue, centerLabel }) {
+  const reveal = useReveal(1100);
+  const [active, setActive] = useState(null);
+  const total = slices.reduce((a, s) => a + s.value, 0) || 1;
+  const r = (size - thickness) / 2;
+  const C = 2 * Math.PI * r;
+  let acc = 0;
+  return (
+    <div className="donut-wrap">
+      <div style={{ position: 'relative', width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--canvas-2)" strokeWidth={thickness} />
+          {slices.map((s, i) => {
+            const frac = s.value / total;
+            const len = frac * C * reveal;
+            const off = -acc * C;
+            acc += frac;
+            return (
+              <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
+                stroke={s.color} strokeWidth={active === i ? thickness + 4 : thickness}
+                strokeDasharray={`${len} ${C - len}`} strokeDashoffset={off}
+                strokeLinecap="butt"
+                style={{ transition: 'stroke-width .2s', cursor: 'pointer' }}
+                onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)} />
+            );
+          })}
+        </svg>
+        <div className="donut-center" style={{ position: 'absolute', inset: 0, display: 'grid', placeContent: 'center' }}>
+          {active !== null ? (
+            <>
+              <div className="v" style={{ color: slices[active].color, fontSize: 22 }}>{Math.round(slices[active].value / total * 100)}%</div>
+              <div className="l" style={{ maxWidth: size - thickness * 2, lineHeight: 1.2 }}>{slices[active].name}</div>
+            </>
+          ) : (
+            <>
+              <div className="v">{centerValue}</div>
+              <div className="l">{centerLabel}</div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="donut-legend">
+        {slices.map((s, i) => (
+          <div key={i} className="it" onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)} style={{ cursor: 'pointer', opacity: active === null || active === i ? 1 : .5, transition: 'opacity .2s' }}>
+            <span className="sw" style={{ background: s.color }} />
+            <span className="nm">{s.name}</span>
+            <span className="pc">{Math.round(s.value / total * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------- Line chart (yearly trend, area + draw-in) -------- */
+function LineChart({ series, height = 260, yearLabels }) {
+  const reveal = useReveal(1300);
+  const [hi, setHi] = useState(null);
+  const W = 760, H = height, padL = 48, padR = 18, padT = 22, padB = 34;
+  const all = series.flatMap((s) => s.points);
+  const max = Math.max(1, ...all);
+  const step = niceStep(max / 4);
+  const top = Math.ceil(max / step) * step;
+  const nt = Math.max(1, Math.round(top / step));
+  const n = yearLabels.length;
+  const x = (i) => padL + (i / Math.max(1, n - 1)) * (W - padL - padR);
+  const y = (v) => padT + (1 - v / top) * (H - padT - padB);
+  const ticks = Array.from({ length: nt + 1 }, (_, i) => top - step * i);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }}
+        onMouseLeave={() => setHi(null)}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const mx = (e.clientX - rect.left) / rect.width * W;
+          let idx = Math.round((mx - padL) / ((W - padL - padR) / Math.max(1, n - 1)));
+          idx = Math.max(0, Math.min(n - 1, idx));
+          setHi(idx);
+        }}>
+        <defs>
+          {series.map((s, si) => (
+            <linearGradient key={si} id={'lg' + si} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke={i === nt ? '#e4ece9' : '#eef3f1'} strokeWidth="1" />
+            <text x={padL - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#7c8a84" fontFamily="Kanit">{fmtCompact(t)}</text>
+          </g>
+        ))}
+        {yearLabels.map((yl, i) => (
+          <text key={i} x={x(i)} y={H - 12} textAnchor="middle" fontSize="12" fill="#56655f" fontFamily="Kanit">{yl}</text>
+        ))}
+        {series.map((s, si) => {
+          const pts = s.points.map((v, i) => [x(i), y(v)]);
+          const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(' ');
+          const area = line + ` L ${x(n - 1)} ${y(0)} L ${x(0)} ${y(0)} Z`;
+          const dash = 2400;
+          return (
+            <g key={si}>
+              <path d={area} fill={`url(#lg${si})`} style={{ opacity: reveal }} />
+              <path d={line} fill="none" stroke={s.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+                strokeDasharray={dash} strokeDashoffset={dash * (1 - reveal)} />
+              {pts.map((p, i) => (
+                <circle key={i} cx={p[0]} cy={p[1]} r={hi === i ? 6 : 4} fill="#fff" stroke={s.color} strokeWidth="2.6"
+                  style={{ opacity: reveal, transition: 'r .15s' }} />
+              ))}
+            </g>
+          );
+        })}
+        {hi !== null && <line x1={x(hi)} x2={x(hi)} y1={padT} y2={H - padB} stroke="#c9a24b" strokeWidth="1" strokeDasharray="4 4" />}
+      </svg>
+      {hi !== null && (
+        <div style={{ position: 'absolute', left: `${x(hi) / W * 100}%`, top: 6, transform: 'translateX(-50%)', background: 'var(--emerald-900)', color: '#eafaf4', borderRadius: 10, padding: '8px 11px', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none', boxShadow: 'var(--shadow-md)', zIndex: 5 }}>
+          <div style={{ fontFamily: 'Kanit', fontWeight: 600, marginBottom: 3 }}>ปีงบ {yearLabels[hi]}</div>
+          {series.map((s, si) => (
+            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 3, background: s.color }} />
+              <span style={{ opacity: .8 }}>{s.name}</span>
+              <span style={{ fontFamily: 'Kanit', fontWeight: 600, marginLeft: 'auto' }}>{fmtTHB(s.points[hi])}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="legend" style={{ marginTop: 10, justifyContent: 'center' }}>
+        {series.map((s, si) => <div key={si} className="it"><span className="sw" style={{ background: s.color }} />{s.name}</div>)}
+      </div>
+    </div>
+  );
+}
+
+/* -------- helpers -------- */
+function niceStep(raw) {
+  const pow = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+  const n = raw / pow;
+  const f = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return f * pow;
+}
+function shade(hex, pct) {
+  const num = parseInt(hex.slice(1), 16);
+  let r = (num >> 16) + Math.round(2.55 * pct);
+  let g = ((num >> 8) & 0xff) + Math.round(2.55 * pct);
+  let b = (num & 0xff) + Math.round(2.55 * pct);
+  r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+Object.assign(window, { GroupedBarChart, DonutChart, LineChart, niceStep, shade });

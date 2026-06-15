@@ -1,139 +1,191 @@
 /* ===================================================================
-   form-speaker.jsx — modal เพิ่ม/แก้ไขค่าวิทยากรภายนอก
+   form.jsx — ProjectForm (add / edit modal) + ConfirmDialog
 =================================================================== */
-function SpeakerForm({ initial, onSave, onClose }) {
-  const blank = { firstName: '', lastName: '', topic: '', date: '', venue: '', amount: '', isPaid: false, remark: '' };
-  const [f, setF] = useState(initial ? { ...initial, amount: initial.amount || '' } : { ...blank });
 
-  const num = (v) => (v === '' || v === null ? 0 : Number(v));
-  const d5  = Math.round(num(f.amount) * 0.05);
-  const d10 = Math.round((num(f.amount) - d5) * 0.10);
-  const totalW = d5 + d10;
-  const netAmt = num(f.amount) - totalW;
+function ProjectForm({ initial, onSave, onClose }) {
+  const D = window.NURSE_DATA;
+  const cats = Object.values(D.categories);
+  const blank = {
+    year: 2568, name: '', category: 'academic', duration: '', target: '',
+    recipients: '', budget: '', income: '', actual: '', owner: D.owners[0], status: 'plan',
+  };
+  const [f, setF] = useState(() => initial ? { ...initial } : blank);
+  const [touched, setTouched] = useState({});
+  const isEdit = !!initial;
 
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const num = (v) => (v === '' || v === null ? 0 : Number(v));
+  const deductUniversity = Math.round(num(f.income) * 0.10);
+  const deductFaculty    = Math.round((num(f.income) - deductUniversity) * 0.20);
+  const remaining = num(f.budget) + num(f.income) - deductUniversity - deductFaculty - num(f.actual);
 
-  const submit = (e) => {
-    e.preventDefault();
-    if (!f.firstName.trim()) { alert('กรุณากรอกชื่อ'); return; }
-    if (!f.topic.trim())     { alert('กรุณากรอกหัวข้อ'); return; }
-    onSave({ ...f, amount: num(f.amount), deduct5: d5, deduct10: d10, totalWithholding: totalW, netAmount: netAmt });
+  const errors = {};
+  if (!String(f.name).trim()) errors.name = 'กรุณากรอกชื่อโครงการ';
+  if (!f.year) errors.year = 'เลือกปีงบประมาณ';
+  if (num(f.budget) < 0) errors.budget = 'ต้องไม่ติดลบ';
+  const valid = Object.keys(errors).length === 0;
+
+  const submit = () => {
+    setTouched({ name: 1, year: 1, budget: 1 });
+    if (!valid) return;
+    onSave({
+      ...f,
+      recipients: num(f.recipients),
+      budget: num(f.budget),
+      income: num(f.income),
+      deductUniversity,
+      deductFaculty,
+      actual: num(f.actual),
+      remaining,
+    });
   };
 
+  const MoneyField = ({ k, label, hint }) => (
+    <div className="field">
+      <label>{label}</label>
+      <div className="input-money">
+        <span className="baht">฿</span>
+        <input className={'input' + (touched[k] && errors[k] ? ' bad' : '')} inputMode="numeric" type="number" min="0"
+          value={f[k]} placeholder="0"
+          onChange={(e) => set(k, e.target.value)} onBlur={() => setTouched((t) => ({ ...t, [k]: 1 }))} />
+      </div>
+      {touched[k] && errors[k] ? <span className="err">{errors[k]}</span> : hint ? <span className="hint">{hint}</span> : null}
+    </div>
+  );
+
   return (
-    <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 640 }}>
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" role="dialog" aria-modal="true">
         <div className="modal-head">
-          <div className="modal-icon" style={{ background: 'linear-gradient(135deg,#c9a24b,#b87d12)' }}><Icon name="plus" /></div>
-          <div>
-            <h3>{initial ? 'แก้ไขข้อมูลค่าวิทยากร' : 'เพิ่มค่าวิทยากรภายนอก'}</h3>
-            <div className="sub">บันทึกรายละเอียดค่าวิทยากรบริการวิชาการ</div>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--emerald-100)', color: 'var(--emerald-700)', display: 'grid', placeItems: 'center' }}>
+            <Icon name={isEdit ? 'edit' : 'plus'} />
           </div>
-          <button className="close-btn" onClick={onClose} aria-label="ปิด"><Icon name="x" /></button>
+          <div style={{ flex: 1 }}>
+            <h3>{isEdit ? 'แก้ไขโครงการ' : 'เพิ่มโครงการใหม่'}</h3>
+            <div className="sub">บันทึกรายละเอียดโครงการบริการวิชาการ</div>
+          </div>
+          <button className="btn btn-icon btn-quiet" onClick={onClose}><Icon name="close" /></button>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="form-grid" style={{ padding: '0 28px 24px' }}>
-
-            {/* ชื่อ-นามสกุล */}
-            <div className="field">
-              <label>ชื่อ (รวมคำนำหน้า) <span className="req">*</span></label>
-              <input className="input" placeholder="เช่น ผศ.ดร.สมชาย" value={f.firstName} onChange={(e) => set('firstName', e.target.value)} />
-            </div>
-            <div className="field">
-              <label>นามสกุล</label>
-              <input className="input" placeholder="เช่น ใจดี" value={f.lastName} onChange={(e) => set('lastName', e.target.value)} />
+        <div className="modal-body">
+          <div className="form-grid">
+            <div className="field col-2">
+              <label>ชื่อโครงการ <span className="req">*</span></label>
+              <input className={'input' + (touched.name && errors.name ? ' bad' : '')} value={f.name}
+                placeholder="เช่น อบรมการช่วยฟื้นคืนชีพขั้นพื้นฐาน (CPR)…"
+                onChange={(e) => set('name', e.target.value)} onBlur={() => setTouched((t) => ({ ...t, name: 1 }))} />
+              {touched.name && errors.name && <span className="err">{errors.name}</span>}
             </div>
 
-            {/* หัวข้อ */}
-            <div className="field" style={{ gridColumn: '1/-1' }}>
-              <label>หัวข้อ/เรื่อง <span className="req">*</span></label>
-              <input className="input" placeholder="เช่น อบรมพยาบาลวิชาชีพ ครั้งที่ 1" value={f.topic} onChange={(e) => set('topic', e.target.value)} />
+            <div className="field">
+              <label>ปีงบประมาณ <span className="req">*</span></label>
+              <select className="select" value={f.year} onChange={(e) => set('year', Number(e.target.value))}>
+                {Array.from({ length: 2590 - 2562 + 1 }, (_, i) => 2562 + i).map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
 
-            {/* วันที่ + สถานที่ */}
             <div className="field">
-              <label>วัน/เดือน/ปี</label>
-              <input className="input" placeholder="เช่น 31-ต.ค.-68" value={f.date} onChange={(e) => set('date', e.target.value)} />
-            </div>
-            <div className="field">
-              <label>สถานที่</label>
-              <input className="input" placeholder="เช่น โรงพยาบาลนราธิวาสราชนครินทร์" value={f.venue} onChange={(e) => set('venue', e.target.value)} />
+              <label>ประเภทโครงการ</label>
+              <select className="select" value={f.category} onChange={(e) => set('category', e.target.value)}>
+                <option value="academic">งานบริการวิชาการ</option>
+              </select>
             </div>
 
-            {/* จำนวนเงิน */}
-            <div className="field" style={{ gridColumn: '1/-1' }}>
-              <label>จำนวนเงินทั้งหมด (บาท)</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-400)', fontFamily: 'Kanit' }}>฿</span>
-                <input className="input" type="number" min="0" step="0.01" placeholder="0.00"
-                  value={f.amount} onChange={(e) => set('amount', e.target.value)}
-                  style={{ paddingLeft: 32 }} />
-              </div>
-              <span className="hint">กรอก 0 หรือเว้นว่างหากไม่ได้รับเงินจากผู้จัด</span>
+            <div className="field">
+              <label>ระยะเวลาดำเนินงาน</label>
+              <input className="input" value={f.duration} placeholder="เช่น ม.ค. – มี.ค. 2568"
+                onChange={(e) => set('duration', e.target.value)} />
             </div>
 
-            {/* computed deductions */}
             <div className="field">
-              <label>หักให้ ม. 5%</label>
+              <label>สถานะโครงการ</label>
+              <select className="select" value={f.status} onChange={(e) => set('status', e.target.value)}>
+                <option value="plan">วางแผน</option>
+                <option value="active">กำลังดำเนินการ</option>
+                <option value="done">เสร็จสิ้น</option>
+              </select>
+            </div>
+
+            <div className="field col-2">
+              <label>กลุ่มเป้าหมาย</label>
+              <input className="input" value={f.target} placeholder="เช่น ผู้สูงอายุติดสังคม 60 ปีขึ้นไป"
+                onChange={(e) => set('target', e.target.value)} />
+            </div>
+
+            <div className="field">
+              <label>จำนวนผู้เข้ารับบริการ</label>
+              <input className="input" type="number" min="0" inputMode="numeric" value={f.recipients} placeholder="0"
+                onChange={(e) => set('recipients', e.target.value)} />
+              <span className="hint">หน่วย: คน</span>
+            </div>
+
+            <div className="field">
+              <label>ผู้รับผิดชอบโครงการ</label>
+              <input className="input" list="owner-list" value={f.owner} placeholder="ชื่อ–สกุล ผู้รับผิดชอบ"
+                onChange={(e) => set('owner', e.target.value)} />
+              <datalist id="owner-list">{D.owners.map((o) => <option key={o} value={o} />)}</datalist>
+            </div>
+
+            <MoneyField k="budget" label="เงินงบประมาณ" hint="งบประมาณแผ่นดิน/เงินอุดหนุน" />
+            <MoneyField k="income" label="เงินรายได้" hint="เงินรายได้/สมทบ" />
+
+            <div className="field">
+              <label>หัก 10% ส่ง มหาวิทยาลัยฯ</label>
               <div className="computed" style={{ background: '#fdf8ec', borderColor: '#e8d08a', color: 'var(--gold-700)' }}>
-                {fmtTHB(d5)}
-                <span style={{ fontSize: 12, color: 'var(--ink-400)', marginLeft: 8 }}>= เงิน × 5%</span>
+                {fmtTHB(deductUniversity)}
+                <span style={{ fontSize: 12, color: 'var(--ink-400)', marginLeft: 8 }}>= รายได้ × 10%</span>
               </div>
             </div>
             <div className="field">
-              <label>หักให้คณะ 10%</label>
+              <label>หัก 20% ส่ง คณะ</label>
               <div className="computed" style={{ background: '#fdf8ec', borderColor: '#e8d08a', color: 'var(--gold-700)' }}>
-                {fmtTHB(d10)}
-                <span style={{ fontSize: 12, color: 'var(--ink-400)', marginLeft: 8 }}>= (เงิน−5%) × 10%</span>
-              </div>
-            </div>
-            <div className="field">
-              <label>จำนวนเงินที่ชำระ (หัก ม.+คณะ)</label>
-              <div className="computed" style={{ background: '#fdf8ec', borderColor: '#e8d08a', color: 'var(--gold-700)', fontWeight: 700 }}>
-                {fmtTHB(totalW)}
-              </div>
-            </div>
-            <div className="field">
-              <label>เงินที่วิทยากรได้รับสุทธิ</label>
-              <div className="computed" style={{ color: 'var(--emerald-700)', background: 'var(--emerald-50)', borderColor: 'var(--emerald-300)' }}>
-                {fmtTHB(netAmt)}
+                {fmtTHB(deductFaculty)}
+                <span style={{ fontSize: 12, color: 'var(--ink-400)', marginLeft: 8 }}>= รายได้ × 20%</span>
               </div>
             </div>
 
-            {/* สถานะ */}
-            <div className="field">
-              <label>สถานะการจ่ายเงิน</label>
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                <button type="button" onClick={() => set('isPaid', true)}
-                  style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1.5px solid', cursor: 'pointer', fontFamily: 'IBM Plex Sans Thai', fontSize: 14, fontWeight: f.isPaid ? 600 : 400,
-                    background: f.isPaid ? 'var(--emerald-50)' : 'var(--canvas)', borderColor: f.isPaid ? 'var(--emerald-400)' : 'var(--line)', color: f.isPaid ? 'var(--emerald-700)' : 'var(--ink-400)' }}>
-                  ✓ จ่ายแล้ว
-                </button>
-                <button type="button" onClick={() => set('isPaid', false)}
-                  style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1.5px solid', cursor: 'pointer', fontFamily: 'IBM Plex Sans Thai', fontSize: 14, fontWeight: !f.isPaid ? 600 : 400,
-                    background: !f.isPaid ? '#fdf0f2' : 'var(--canvas)', borderColor: !f.isPaid ? '#f6a3b0' : 'var(--line)', color: !f.isPaid ? 'var(--danger)' : 'var(--ink-400)' }}>
-                  ✗ ยังไม่จ่าย
-                </button>
-              </div>
-            </div>
-            <div className="field">
-              <label>หมายเหตุ</label>
-              <input className="input" placeholder="เช่น ไม่ได้รับเงินจากผู้จัด" value={f.remark} onChange={(e) => set('remark', e.target.value)} />
-            </div>
+            <MoneyField k="actual" label="ค่าใช้จ่ายจริง" hint="ยอดเบิกจ่ายจริง" />
 
+            <div className="field">
+              <label>เงินคงเหลือ (คำนวณอัตโนมัติ)</label>
+              <div className="computed" style={{ color: remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)', borderColor: remaining < 0 ? '#f6c9d1' : 'var(--emerald-300)', background: remaining < 0 ? '#fdf0f2' : 'var(--emerald-50)' }}>
+                {fmtTHB(remaining)}
+                {remaining < 0 && <span style={{ fontSize: 12, marginLeft: 8 }}>เกินงบ</span>}
+              </div>
+              <span className="hint">งบ + รายได้ − หัก10% − หัก20% − ค่าใช้จ่ายจริง</span>
+            </div>
           </div>
+        </div>
 
-          <div className="modal-foot">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
-            <button type="submit" className="btn btn-primary">
-              <Icon name="check" />{initial ? 'บันทึกการแก้ไข' : 'เพิ่มค่าวิทยากร'}
-            </button>
-          </div>
-        </form>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary" onClick={submit} disabled={!valid} style={{ opacity: valid ? 1 : .55 }}>
+            <Icon name="check" />{isEdit ? 'บันทึกการแก้ไข' : 'เพิ่มโครงการ'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-Object.assign(window, { SpeakerForm });
+function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose, danger }) {
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ width: 'min(440px,100%)' }} role="dialog" aria-modal="true">
+        <div className="modal-body" style={{ textAlign: 'center', paddingTop: 30 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px', display: 'grid', placeItems: 'center', background: danger ? '#fce9ec' : 'var(--emerald-100)', color: danger ? 'var(--danger)' : 'var(--emerald-700)' }}>
+            <Icon name={danger ? 'trash' : 'alert'} size={26} />
+          </div>
+          <h3 style={{ fontSize: 18, marginBottom: 8 }}>{title}</h3>
+          <p style={{ color: 'var(--ink-500)', fontSize: 14, lineHeight: 1.6, margin: 0 }}>{message}</p>
+        </div>
+        <div className="modal-foot" style={{ justifyContent: 'center', borderTop: 0, paddingTop: 0 }}>
+          <button className="btn btn-ghost" onClick={onClose}>ยกเลิก</button>
+          <button className={'btn ' + (danger ? 'btn-danger' : 'btn-primary')} onClick={onConfirm}>{confirmLabel || 'ยืนยัน'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { ProjectForm, ConfirmDialog });

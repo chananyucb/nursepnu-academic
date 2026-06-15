@@ -1,166 +1,136 @@
 /* ===================================================================
-   view-summary.jsx — budget vs income summary + report export
+   view-speakers.jsx — ตารางค่าวิทยากรภายนอก
 =================================================================== */
+function SpeakerList({ records, onAdd, onEdit, onDelete, fiscalYear }) {
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState('all');
+  const [sort, setSort] = useState({ key: 'seq', dir: 'asc' });
 
-function SummaryStat({ label, value, color, sub, money = true }) {
-  const v = useCountUp(value, 1100, [value]);
-  return (
-    <div style={{ flex: 1, minWidth: 150 }}>
-      <div style={{ fontSize: 12.5, color: 'var(--ink-400)' }}>{label}</div>
-      <div className="num" style={{ fontFamily: 'Kanit', fontWeight: 600, fontSize: 24, color, lineHeight: 1.2, marginTop: 2 }}>{money ? fmtTHB(v) : fmtNum(v)}</div>
-      {sub && <div style={{ fontSize: 12, color: 'var(--ink-400)' }}>{sub}</div>}
-    </div>
+  const filtered = records.filter((r) => {
+    const q = search.toLowerCase();
+    const match = !q || (r.firstName + r.lastName + r.topic + r.venue).toLowerCase().includes(q);
+    const stMatch = statusF === 'all' || (statusF === 'paid' ? r.isPaid : !r.isPaid);
+    return match && stMatch;
+  }).sort((a, b) => {
+    const v = sort.dir === 'asc' ? 1 : -1;
+    if (sort.key === 'seq') return (a.seq - b.seq) * v;
+    if (sort.key === 'amount') return (a.amount - b.amount) * v;
+    if (sort.key === 'date') return a.date.localeCompare(b.date) * v;
+    return 0;
+  });
+
+  const th = (k, label) => (
+    <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => setSort(s => ({ key: k, dir: s.key === k && s.dir === 'asc' ? 'desc' : 'asc' }))}>
+      {label}{sort.key === k ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+    </th>
   );
-}
 
-function BudgetSummary({ projects, year, onExport }) {
-  const t = totals(projects);
-  const allYrData = byYear(projects).map((d) => ({ ...d, label: '' + d.year }));
-  const maxYr = year !== 'all' ? Number(year) : (allYrData.length ? allYrData[allYrData.length - 1].year : 2570);
-  const yrData = allYrData.filter((d) => d.year >= maxYr - 4 && d.year <= maxYr); // charts: 5 yrs
-  const yrTable = allYrData; // table: all years
-  const fund = t.budget + t.income;
-  const usePct = fund > 0 ? Math.round(t.actual / fund * 100) : 0;
+  const totAmount = filtered.reduce((a, r) => a + r.amount, 0);
+  const totD5     = filtered.reduce((a, r) => a + r.deduct5, 0);
+  const totD10    = filtered.reduce((a, r) => a + r.deduct10, 0);
+  const totW      = filtered.reduce((a, r) => a + r.totalWithholding, 0);
+  const paidCount = filtered.filter(r => r.isPaid).length;
+
+  const exportCSV = () => {
+    const head = ['ลำดับ','ชื่อ','นามสกุล','หัวข้อ/เรื่อง','วัน/เดือน/ปี','สถานที่','จำนวนเงินทั้งหมด','หักให้ ม. 5%','หักให้คณะ 10%','จำนวนเงินที่ชำระ','เงินสุทธิ','สถานะ','หมายเหตุ'];
+    const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const lines = filtered.map(r => [r.seq, r.firstName, r.lastName, r.topic, r.date, r.venue, r.amount, r.deduct5, r.deduct10, r.totalWithholding, r.netAmount, r.isPaid ? 'จ่ายแล้ว' : 'ยังไม่จ่าย', r.remark].map(esc).join(','));
+    const csv = '\uFEFF' + [head.map(esc).join(','), ...lines].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `ค่าวิทยากรภายนอก${fiscalYear && fiscalYear !== 'all' ? '_ปีงบ' + fiscalYear : ''}.csv`;
+    a.click();
+  };
 
   return (
     <div className="view">
-      {/* report header (prints too) */}
-      <div className="card card-pad" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 12, background: 'linear-gradient(150deg,var(--emerald-600),var(--emerald-800))', color: '#fff', display: 'grid', placeItems: 'center' }}><Icon name="summary" /></div>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <h2 style={{ fontSize: 19 }}>รายงานสรุปงบประมาณและเงินรายได้</h2>
-            <div style={{ fontSize: 13, color: 'var(--ink-500)' }}>คณะพยาบาลศาสตร์ มหาวิทยาลัยนราธิวาสราชนครินทร์ · {year === 'all' ? `ปีงบประมาณ ${maxYr - 4}–${maxYr} (5 ปีล่าสุด)` : 'ปีงบประมาณ ' + year}</div>
-          </div>
-          <div className="no-print" style={{ display: 'flex', gap: 9 }}>
-            <button className="btn btn-ghost" onClick={onExport}><Icon name="download" />ส่งออก CSV</button>
-            <button className="btn btn-primary" onClick={() => window.print()}><Icon name="print" />พิมพ์รายงาน</button>
-          </div>
+      <div className="toolbar" style={{ flexWrap: 'wrap', gap: 10 }}>
+        <div className="seg">
+          <button className={statusF === 'all' ? 'on' : ''} onClick={() => setStatusF('all')}>ทั้งหมด</button>
+          <button className={statusF === 'paid' ? 'on' : ''} onClick={() => setStatusF('paid')}>จ่ายแล้ว</button>
+          <button className={statusF === 'unpaid' ? 'on' : ''} onClick={() => setStatusF('unpaid')}>ยังไม่จ่าย</button>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-          <SummaryStat label="เงินงบประมาณรวม" value={t.budget} color="var(--emerald-700)" sub={`${Math.round(t.budget / (fund || 1) * 100)}% ของวงเงิน`} />
-          <SummaryStat label="เงินรายได้รวม" value={t.income} color="var(--gold-700)" sub={`${Math.round(t.income / (fund || 1) * 100)}% ของวงเงิน`} />
-          <SummaryStat label="วงเงินรวมทั้งสิ้น" value={fund} color="var(--ink-900)" sub={`${t.count} โครงการ`} />
-          <SummaryStat label="ค่าใช้จ่ายจริง" value={t.actual} color="var(--info)" sub={`ใช้ไป ${usePct}%`} />
-          <SummaryStat label="หัก 10% ส่ง มหาวิทยาลัยฯ" value={t.deductUniversity} color="var(--gold-700)" sub="10% ของรายได้" />
-          <SummaryStat label="หัก 20% ส่ง คณะ" value={t.deductFaculty} color="var(--gold-700)" sub="20% ของรายได้หลังหัก 10%" />
-          <SummaryStat label="เงินคงเหลือสุทธิ" value={t.remaining} color={t.remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)'} sub={t.remaining < 0 ? 'เกินงบ' : `คงเหลือ ${100 - usePct}%`} />
-        </div>
+        <div className="spacer"></div>
+        <button className="btn btn-ghost no-print" onClick={exportCSV}><Icon name="download" />ส่งออก CSV</button>
+        <button className="btn btn-ghost no-print" onClick={() => window.print()}><Icon name="print" />พิมพ์รายงาน</button>
       </div>
 
-      <div className="charts-row">
-        <div className="card card-pad">
-          <div className="card-head"><div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--emerald-100)', color: 'var(--emerald-700)', display: 'grid', placeItems: 'center' }}><Icon name="bars" /></div><h3>เปรียบเทียบงบประมาณ · รายได้ · ใช้จริง</h3></div>
-          <GroupedBarChart data={yrData} />
-        </div>
-        <div className="card card-pad">
-          <div className="card-head"><div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--gold-100)', color: 'var(--gold-700)', display: 'grid', placeItems: 'center' }}><Icon name="pie" /></div><h3>แหล่งที่มาของวงเงิน</h3></div>
-          <DonutChart
-            slices={[
-              { name: 'เงินงบประมาณ', value: t.budget, color: '#0e5c4a' },
-              { name: 'เงินรายได้', value: t.income, color: '#c9a24b' },
-            ]}
-            centerValue={fmtCompact(fund)} centerLabel="วงเงินรวม" />
-        </div>
-      </div>
-
-      {/* deduction comparison chart */}
-      <div className="card card-pad" style={{ marginTop: 16 }}>
-        <div className="card-head">
-          <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--gold-100)', color: 'var(--gold-700)', display: 'grid', placeItems: 'center' }}><Icon name="wallet" /></div>
-          <div>
-            <h3>เปรียบเทียบยอดหัก 10% และ 20% รายปี</h3>
-            <div className="sub">หัก 10% ส่ง มหาวิทยาลัยฯ · หัก 20% ส่ง คณะ (จากรายได้หลังหัก 10%)</div>
-          </div>
-        </div>
-        <GroupedBarChart data={yrData} height={200}
-          series={[
-            { key: 'deductUniversity', name: 'หัก 10% ส่ง มหาวิทยาลัยฯ', color: '#c9a24b' },
-            { key: 'deductFaculty',    name: 'หัก 20% ส่ง คณะ',           color: '#b87d12' },
-          ]} />
-      </div>
-
-      {/* by year table */}
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card" style={{ marginTop: 14 }}>
         <div className="card-pad" style={{ paddingBottom: 8 }}>
-          <div className="card-head" style={{ marginBottom: 0 }}><h3>สรุปตามปีงบประมาณ</h3><div className="spacer"></div><span className="sub">หน่วย: บาท</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            <span className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--emerald-800)' }}>{filtered.length}</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-400)' }}>รายการ{fiscalYear && fiscalYear !== 'all' ? ` · ปีงบ ${fiscalYear}` : ' · ทุกปีงบ'}</span>
+            <span style={{ color: 'var(--line)' }}>·</span>
+            <span style={{ fontSize: 13 }}>รวม <b className="num" style={{ color: 'var(--emerald-700)' }}>{fmtTHB(totAmount)}</b></span>
+            <span style={{ color: 'var(--line)' }}>·</span>
+            <span style={{ fontSize: 13 }}>หัก ม.5% <b className="num" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD5)}</b></span>
+            <span style={{ color: 'var(--line)' }}>·</span>
+            <span style={{ fontSize: 13 }}>หัก คณะ10% <b className="num" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD10)}</b></span>
+            <span style={{ color: 'var(--line)' }}>·</span>
+            <span style={{ fontSize: 13 }}>จ่ายแล้ว <b className="num" style={{ color: 'var(--emerald-600)' }}>{paidCount}/{filtered.length}</b></span>
+          </div>
         </div>
         <div className="table-wrap">
-          <table className="data">
-            <thead><tr>
-              <th>ปีงบ</th><th style={{ textAlign: 'right' }}>โครงการ</th><th style={{ textAlign: 'right' }}>งบประมาณ</th>
-              <th style={{ textAlign: 'right' }}>รายได้</th>
-              <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หัก 10% มหาลัยฯ</th>
-              <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หัก 20% คณะ</th>
-              <th style={{ textAlign: 'right' }}>วงเงินรวม</th>
-              <th style={{ textAlign: 'right' }}>ใช้จริง</th><th style={{ textAlign: 'right' }}>คงเหลือ</th><th style={{ minWidth: 110 }}>% ใช้จ่าย</th>
-            </tr></thead>
+          <table className="data" style={{ fontSize: 13.5 }}>
+            <thead>
+              <tr>
+                {th('seq', 'ลำดับ')}
+                <th>ชื่อ-สกุล</th>
+                <th style={{ minWidth: 220 }}>หัวข้อ/เรื่อง</th>
+                {th('date', 'วัน/เดือน/ปี')}
+                <th>สถานที่</th>
+                {th('amount', 'จำนวนเงินทั้งหมด')}
+                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หักให้ ม. 5%</th>
+                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หักให้คณะ 10%</th>
+                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>จำนวนเงินที่ชำระ</th>
+                <th style={{ textAlign: 'center' }}>จ่าย</th>
+                <th style={{ textAlign: 'center' }}>ยังไม่จ่าย</th>
+                <th>หมายเหตุ</th>
+                <th className="no-print" style={{ width: 80 }}></th>
+              </tr>
+            </thead>
             <tbody>
-              {yrTable.map((d) => {
-                const f = d.budget + d.income; const pc = f > 0 ? Math.round(d.actual / f * 100) : 0;
-                return (
-                  <tr key={d.year} style={{ cursor: 'default' }}>
-                    <td className="td-name">{d.year}</td>
-                    <td className="td-money num">{d.count}</td>
-                    <td className="td-money">{fmtTHB(d.budget)}</td>
-                    <td className="td-money">{fmtTHB(d.income)}</td>
-                    <td className="td-money" style={{ color: 'var(--gold-700)', fontWeight: 600 }}>{fmtTHB(d.deductUniversity || 0)}</td>
-                    <td className="td-money" style={{ color: 'var(--gold-700)', fontWeight: 600 }}>{fmtTHB(d.deductFaculty || 0)}</td>
-                    <td className="td-money" style={{ fontWeight: 600 }}>{fmtTHB(f)}</td>
-                    <td className="td-money">{fmtTHB(d.actual)}</td>
-                    <td className="td-money" style={{ color: d.remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)' }}>{fmtTHB(d.remaining)}</td>
-                    <td><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><div className={'mini-bar' + (pc >= 100 ? ' over' : '')} style={{ flex: 1 }}><i style={{ width: Math.min(100, pc) + '%' }} /></div><span className="num" style={{ fontSize: 12.5, minWidth: 30, color: 'var(--ink-500)' }}>{pc}%</span></div></td>
-                  </tr>
-                );
-              })}
+              {filtered.map((r) => (
+                <tr key={r.id}>
+                  <td className="num" style={{ fontWeight: 700, color: 'var(--ink-400)' }}>{r.seq}</td>
+                  <td>
+                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.firstName}</div>
+                    <div style={{ color: 'var(--ink-500)', fontSize: 12.5 }}>{r.lastName}</div>
+                  </td>
+                  <td><div className="td-name" style={{ maxWidth: 260, whiteSpace: 'normal', lineHeight: 1.4 }}>{r.topic}</div></td>
+                  <td className="num" style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>{r.date}</td>
+                  <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.venue}</td>
+                  <td className="td-money" style={{ fontWeight: 600 }}>{r.amount > 0 ? fmtTHB(r.amount) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{r.deduct5 > 0 ? fmtTHB(r.deduct5) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{r.deduct10 > 0 ? fmtTHB(r.deduct10) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)', fontWeight: 700 }}>{r.totalWithholding > 0 ? fmtTHB(r.totalWithholding) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
+                  <td style={{ textAlign: 'center' }}>{r.isPaid ? <span style={{ color: 'var(--emerald-600)', fontSize: 16 }}>✓</span> : ''}</td>
+                  <td style={{ textAlign: 'center' }}>{!r.isPaid ? <span style={{ color: 'var(--danger)', fontSize: 16 }}>✓</span> : ''}</td>
+                  <td style={{ fontSize: 12, color: 'var(--ink-400)', maxWidth: 160 }}>{r.remark}</td>
+                  <td className="no-print">
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn-icon" title="แก้ไข" onClick={() => onEdit(r)}><Icon name="edit" size={15} /></button>
+                      <button className="btn-icon danger" title="ลบ" onClick={() => onDelete(r)}><Icon name="trash" size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={13} style={{ textAlign: 'center', padding: '40px', color: 'var(--ink-300)' }}>ไม่พบข้อมูล</td></tr>
+              )}
             </tbody>
-            <tfoot>
-              <tr style={{ background: 'var(--emerald-50)', fontWeight: 700 }}>
-                <td className="td-name" style={{ color: 'var(--emerald-800)' }}>รวมทั้งสิ้น</td>
-                <td className="td-money num">{t.count}</td>
-                <td className="td-money">{fmtTHB(t.budget)}</td>
-                <td className="td-money">{fmtTHB(t.income)}</td>
-                <td className="td-money">{fmtTHB(fund)}</td>
-                <td className="td-money">{fmtTHB(t.actual)}</td>
-                <td className="td-money" style={{ color: t.remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)' }}>{fmtTHB(t.remaining)}</td>
-                <td className="num" style={{ fontFamily: 'Kanit' }}>{usePct}%</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* by category table — simplified to single row since one project type */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-pad" style={{ paddingBottom: 8 }}>
-          <div className="card-head" style={{ marginBottom: 0 }}><h3>ภาพรวมงานบริการวิชาการ</h3><div className="spacer"></div><span className="sub">หน่วย: บาท</span></div>
-        </div>
-        <div className="table-wrap">
-          <table className="data">
-            <thead><tr>
-              <th>รายการ</th><th style={{ textAlign: 'right' }}>โครงการ</th><th style={{ textAlign: 'right' }}>ผู้รับบริการ (คน)</th>
-              <th style={{ textAlign: 'right' }}>วงเงินรวม</th><th style={{ textAlign: 'right' }}>ใช้จริง</th><th style={{ textAlign: 'right' }}>คงเหลือ</th>
-            </tr></thead>
-            <tbody>
-              <tr style={{ cursor: 'default' }}>
-                <td className="td-name">งานบริการวิชาการ</td>
-                <td className="td-money num">{t.count}</td>
-                <td className="td-money num">{fmtNum(t.recipients)}</td>
-                <td className="td-money" style={{ fontWeight: 600 }}>{fmtTHB(fund)}</td>
-                <td className="td-money">{fmtTHB(t.actual)}</td>
-                <td className="td-money" style={{ color: t.remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)', fontWeight:600 }}>{fmtTHB(t.remaining)}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr style={{ background: 'var(--emerald-50)', fontWeight: 700 }}>
-                <td className="td-name" style={{ color: 'var(--emerald-800)' }}>รวมทั้งสิ้น</td>
-                <td className="td-money num">{t.count}</td>
-                <td className="td-money num">{fmtNum(t.recipients)}</td>
-                <td className="td-money">{fmtTHB(fund)}</td>
-                <td className="td-money">{fmtTHB(t.actual)}</td>
-                <td className="td-money" style={{ color: t.remaining < 0 ? 'var(--danger)' : 'var(--emerald-700)' }}>{fmtTHB(t.remaining)}</td>
-              </tr>
-            </tfoot>
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr style={{ background: 'var(--emerald-50)', fontWeight: 700 }}>
+                  <td colSpan={5} style={{ padding: '10px 18px', color: 'var(--emerald-800)' }}>รวมทั้งสิ้น</td>
+                  <td className="td-money">{fmtTHB(totAmount)}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD5)}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD10)}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totW)}</td>
+                  <td colSpan={4}></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -168,4 +138,4 @@ function BudgetSummary({ projects, year, onExport }) {
   );
 }
 
-Object.assign(window, { BudgetSummary });
+Object.assign(window, { SpeakerList });

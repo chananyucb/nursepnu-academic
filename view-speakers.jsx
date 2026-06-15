@@ -1,136 +1,162 @@
 /* ===================================================================
-   view-speakers.jsx — ตารางค่าวิทยากรภายนอก
+   view-speaker-dashboard.jsx — แดชบอร์ดค่าวิทยากรภายนอก
 =================================================================== */
-function SpeakerList({ records, onAdd, onEdit, onDelete, fiscalYear }) {
-  const [search, setSearch] = useState('');
-  const [statusF, setStatusF] = useState('all');
-  const [sort, setSort] = useState({ key: 'seq', dir: 'asc' });
+function SpeakerDashboard({ records, fiscalYear }) {
+  const tot       = records.reduce((a, r) => a + r.amount, 0);
+  const totD5     = records.reduce((a, r) => a + r.deduct5, 0);
+  const totD10    = records.reduce((a, r) => a + r.deduct10, 0);
+  const totW      = records.reduce((a, r) => a + r.totalWithholding, 0);
+  const totNet    = records.reduce((a, r) => a + r.netAmount, 0);
+  const paidCount = records.filter(r => r.isPaid).length;
+  const unpaidAmt = records.filter(r => !r.isPaid).reduce((a, r) => a + r.amount, 0);
+  const paidAmt   = records.filter(r => r.isPaid).reduce((a, r) => a + r.amount, 0);
 
-  const filtered = records.filter((r) => {
-    const q = search.toLowerCase();
-    const match = !q || (r.firstName + r.lastName + r.topic + r.venue).toLowerCase().includes(q);
-    const stMatch = statusF === 'all' || (statusF === 'paid' ? r.isPaid : !r.isPaid);
-    return match && stMatch;
-  }).sort((a, b) => {
-    const v = sort.dir === 'asc' ? 1 : -1;
-    if (sort.key === 'seq') return (a.seq - b.seq) * v;
-    if (sort.key === 'amount') return (a.amount - b.amount) * v;
-    if (sort.key === 'date') return a.date.localeCompare(b.date) * v;
-    return 0;
+  const vTot   = useCountUp(tot,   1200, [tot]);
+  const vD5    = useCountUp(totD5, 1200, [totD5]);
+  const vD10   = useCountUp(totD10,1200, [totD10]);
+  const vNet   = useCountUp(totNet,1200, [totNet]);
+
+  /* monthly bar data */
+  const monthMap = {};
+  records.forEach((r) => {
+    const m = r.date ? r.date.replace(/^\d+-\d+-/, '').replace(/^\d+\s/, '') : 'ไม่ระบุ';
+    if (!monthMap[m]) monthMap[m] = { label: m, amount: 0, deduct5: 0, deduct10: 0 };
+    monthMap[m].amount  += r.amount;
+    monthMap[m].deduct5 += r.deduct5;
+    monthMap[m].deduct10+= r.deduct10;
   });
+  const monthData = Object.values(monthMap).slice(0, 8);
 
-  const th = (k, label) => (
-    <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => setSort(s => ({ key: k, dir: s.key === k && s.dir === 'asc' ? 'desc' : 'asc' }))}>
-      {label}{sort.key === k ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
-    </th>
-  );
+  const [rowsToShow, setRowsToShow] = useState(5);
 
-  const totAmount = filtered.reduce((a, r) => a + r.amount, 0);
-  const totD5     = filtered.reduce((a, r) => a + r.deduct5, 0);
-  const totD10    = filtered.reduce((a, r) => a + r.deduct10, 0);
-  const totW      = filtered.reduce((a, r) => a + r.totalWithholding, 0);
-  const paidCount = filtered.filter(r => r.isPaid).length;
+  const donutSlices = [
+    { name: 'จ่ายแล้ว',    value: paidCount,              color: '#2563eb' },
+    { name: 'ยังไม่จ่าย',  value: records.length - paidCount, color: '#e11d48' },
+  ].filter(s => s.value > 0);
 
-  const exportCSV = () => {
-    const head = ['ลำดับ','ชื่อ','นามสกุล','หัวข้อ/เรื่อง','วัน/เดือน/ปี','สถานที่','จำนวนเงินทั้งหมด','หักให้ ม. 5%','หักให้คณะ 10%','จำนวนเงินที่ชำระ','เงินสุทธิ','สถานะ','หมายเหตุ'];
-    const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-    const lines = filtered.map(r => [r.seq, r.firstName, r.lastName, r.topic, r.date, r.venue, r.amount, r.deduct5, r.deduct10, r.totalWithholding, r.netAmount, r.isPaid ? 'จ่ายแล้ว' : 'ยังไม่จ่าย', r.remark].map(esc).join(','));
-    const csv = '\uFEFF' + [head.map(esc).join(','), ...lines].join('\r\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    a.download = `ค่าวิทยากรภายนอก${fiscalYear && fiscalYear !== 'all' ? '_ปีงบ' + fiscalYear : ''}.csv`;
-    a.click();
-  };
+  const deductDonut = [
+    { name: 'หัก 5% ม.',   value: totD5,  color: '#f59e0b' },
+    { name: 'หัก 10% คณะ', value: totD10, color: '#b45309' },
+    { name: 'เงินสุทธิวิทยากร', value: totNet, color: '#2563eb' },
+  ].filter(s => s.value > 0);
 
   return (
     <div className="view">
-      <div className="toolbar" style={{ flexWrap: 'wrap', gap: 10 }}>
-        <div className="seg">
-          <button className={statusF === 'all' ? 'on' : ''} onClick={() => setStatusF('all')}>ทั้งหมด</button>
-          <button className={statusF === 'paid' ? 'on' : ''} onClick={() => setStatusF('paid')}>จ่ายแล้ว</button>
-          <button className={statusF === 'unpaid' ? 'on' : ''} onClick={() => setStatusF('unpaid')}>ยังไม่จ่าย</button>
+      {/* KPI row */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <div className="kpi acc-emerald">
+          <div className="kpi-icon"><Icon name="users" /></div>
+          <div className="kpi-label">วิทยากรทั้งหมด</div>
+          <div className="kpi-value num">{records.length} <span style={{ fontSize: 16, fontWeight: 500 }}>ราย</span></div>
+          <div className="kpi-foot"><span className="kpi-trend up"><Icon name="check" size={13} />{paidCount} จ่ายแล้ว</span><span style={{ color: 'var(--ink-300)' }}>·</span><span>{records.length - paidCount} ยังไม่จ่าย</span><span style={{ color: 'var(--ink-300)' }}>·</span><span style={{ color: 'var(--ink-400)' }}>{fiscalYear !== 'all' ? `ปีงบ ${fiscalYear}` : 'ทุกปีงบ'}</span></div>
         </div>
-        <div className="spacer"></div>
-        <button className="btn btn-ghost no-print" onClick={exportCSV}><Icon name="download" />ส่งออก CSV</button>
-        <button className="btn btn-ghost no-print" onClick={() => window.print()}><Icon name="print" />พิมพ์รายงาน</button>
+        <div className="kpi acc-gold">
+          <div className="kpi-icon"><Icon name="wallet" /></div>
+          <div className="kpi-label">ค่าวิทยากรรวม</div>
+          <div className="kpi-value num">{fmtTHB(vTot)}</div>
+          <div className="kpi-foot"><span>จ่ายแล้ว {fmtCompact(paidAmt)}</span><span style={{ color: 'var(--ink-300)' }}>·</span><span>ค้าง {fmtCompact(unpaidAmt)}</span></div>
+        </div>
+        <div className="kpi acc-gold">
+          <div className="kpi-icon"><Icon name="pie" /></div>
+          <div className="kpi-label">หัก 5% ส่ง ม.</div>
+          <div className="kpi-value num">{fmtTHB(vD5)}</div>
+          <div className="kpi-foot"><span>5% ของค่าวิทยากรรวม</span></div>
+        </div>
+        <div className="kpi acc-gold">
+          <div className="kpi-icon"><Icon name="pie" /></div>
+          <div className="kpi-label">หัก 10% ส่ง คณะ</div>
+          <div className="kpi-value num">{fmtTHB(vD10)}</div>
+          <div className="kpi-foot"><span>10% ของ(เงิน−5%)</span></div>
+        </div>
+        <div className="kpi acc-emerald">
+          <div className="kpi-icon"><Icon name="trending" /></div>
+          <div className="kpi-label">เงินสุทธิวิทยากร</div>
+          <div className="kpi-value num">{fmtTHB(vNet)}</div>
+          <div className="kpi-foot"><span>หลังหักทุกรายการ</span></div>
+        </div>
       </div>
 
-      <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-pad" style={{ paddingBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            <span className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--emerald-800)' }}>{filtered.length}</span>
-            <span style={{ fontSize: 13, color: 'var(--ink-400)' }}>รายการ{fiscalYear && fiscalYear !== 'all' ? ` · ปีงบ ${fiscalYear}` : ' · ทุกปีงบ'}</span>
-            <span style={{ color: 'var(--line)' }}>·</span>
-            <span style={{ fontSize: 13 }}>รวม <b className="num" style={{ color: 'var(--emerald-700)' }}>{fmtTHB(totAmount)}</b></span>
-            <span style={{ color: 'var(--line)' }}>·</span>
-            <span style={{ fontSize: 13 }}>หัก ม.5% <b className="num" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD5)}</b></span>
-            <span style={{ color: 'var(--line)' }}>·</span>
-            <span style={{ fontSize: 13 }}>หัก คณะ10% <b className="num" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD10)}</b></span>
-            <span style={{ color: 'var(--line)' }}>·</span>
-            <span style={{ fontSize: 13 }}>จ่ายแล้ว <b className="num" style={{ color: 'var(--emerald-600)' }}>{paidCount}/{filtered.length}</b></span>
+      {/* charts */}
+      <div className="charts-row" style={{ marginTop: 20 }}>
+        {/* paid/unpaid donut */}
+        <div className="card card-pad">
+          <div className="card-head">
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--emerald-100)', color: 'var(--emerald-700)', display: 'grid', placeItems: 'center' }}><Icon name="pie" /></div>
+            <div><h3>สถานะการจ่ายเงิน</h3><div className="sub">จ่ายแล้ว / ยังไม่จ่าย</div></div>
+          </div>
+          <DonutChart slices={donutSlices} centerValue={records.length} centerLabel="รายการ" />
+        </div>
+        {/* deduction breakdown donut */}
+        <div className="card card-pad">
+          <div className="card-head">
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--gold-100)', color: 'var(--gold-700)', display: 'grid', placeItems: 'center' }}><Icon name="wallet" /></div>
+            <div><h3>สัดส่วนการหักเงิน</h3><div className="sub">หัก 5% ม. · หัก 10% คณะ · สุทธิ</div></div>
+          </div>
+          <DonutChart slices={deductDonut} centerValue={fmtCompact(tot)} centerLabel="รวม" />
+        </div>
+      </div>
+
+      {/* deduction comparison bar chart */}
+      <div className="card card-pad" style={{ marginTop: 16 }}>
+        <div className="card-head">
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--gold-100)', color: 'var(--gold-700)', display: 'grid', placeItems: 'center' }}><Icon name="bars" /></div>
+          <div>
+            <h3>เปรียบเทียบยอดหัก 5% และ 10%</h3>
+            <div className="sub">หัก 5% ส่ง มหาวิทยาลัยฯ · หัก 10% ส่ง คณะ (รวม {records.length} ราย)</div>
+          </div>
+          <div className="spacer"></div>
+          <div style={{ display: 'flex', gap: 14, fontSize: 12.5, alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#c9a24b', display: 'inline-block' }} />หัก 5%: {fmtTHB(totD5)}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#b87d12', display: 'inline-block' }} />หัก 10%: {fmtTHB(totD10)}</span>
+          </div>
+        </div>
+        <GroupedBarChart data={monthData} height={200}
+          series={[
+            { key: 'deduct5',  name: 'หัก 5% ส่ง มหาวิทยาลัยฯ', color: '#c9a24b' },
+            { key: 'deduct10', name: 'หัก 10% ส่ง คณะ',           color: '#b87d12' },
+          ]} />
+      </div>
+
+      {/* recent records table */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-pad" style={{ paddingBottom: 6 }}>
+          <div className="card-head" style={{ marginBottom: 4 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--emerald-100)', color: 'var(--emerald-700)', display: 'grid', placeItems: 'center' }}><Icon name="award" /></div>
+            <div><h3>รายการล่าสุด</h3><div className="sub">{rowsToShow} รายการล่าสุด</div></div>
+            <div className="spacer"></div>
+            <select value={rowsToShow} onChange={e => setRowsToShow(Number(e.target.value))}
+              style={{ padding: '6px 28px 6px 12px', borderRadius: 9, border: '1.5px solid var(--line)', background: 'var(--surface)', fontFamily: 'IBM Plex Sans Thai', fontSize: 13, color: 'var(--ink-700)', cursor: 'pointer', outline: 'none', WebkitAppearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%2364748b' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 7px center' }}>
+              {[5,10,15,20].map(n => <option key={n} value={n}>แสดง {n} รายการ</option>)}
+            </select>
           </div>
         </div>
         <div className="table-wrap">
-          <table className="data" style={{ fontSize: 13.5 }}>
-            <thead>
-              <tr>
-                {th('seq', 'ลำดับ')}
-                <th>ชื่อ-สกุล</th>
-                <th style={{ minWidth: 220 }}>หัวข้อ/เรื่อง</th>
-                {th('date', 'วัน/เดือน/ปี')}
-                <th>สถานที่</th>
-                {th('amount', 'จำนวนเงินทั้งหมด')}
-                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หักให้ ม. 5%</th>
-                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หักให้คณะ 10%</th>
-                <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>จำนวนเงินที่ชำระ</th>
-                <th style={{ textAlign: 'center' }}>จ่าย</th>
-                <th style={{ textAlign: 'center' }}>ยังไม่จ่าย</th>
-                <th>หมายเหตุ</th>
-                <th className="no-print" style={{ width: 80 }}></th>
-              </tr>
-            </thead>
+          <table className="data" style={{ fontSize: 13 }}>
+            <thead><tr>
+              <th>ลำดับ</th><th>ชื่อ-สกุล</th><th>หัวข้อ</th><th>วันที่</th>
+              <th style={{ textAlign: 'right' }}>จำนวนเงิน</th>
+              <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หัก 5% ม.</th>
+              <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หัก 10% คณะ</th>
+              <th style={{ textAlign: 'right', color: 'var(--gold-700)' }}>หัก รวม</th>
+              <th style={{ textAlign: 'center' }}>สถานะ</th>
+            </tr></thead>
             <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td className="num" style={{ fontWeight: 700, color: 'var(--ink-400)' }}>{r.seq}</td>
-                  <td>
-                    <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.firstName}</div>
-                    <div style={{ color: 'var(--ink-500)', fontSize: 12.5 }}>{r.lastName}</div>
-                  </td>
-                  <td><div className="td-name" style={{ maxWidth: 260, whiteSpace: 'normal', lineHeight: 1.4 }}>{r.topic}</div></td>
-                  <td className="num" style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>{r.date}</td>
-                  <td style={{ fontSize: 12.5, color: 'var(--ink-500)' }}>{r.venue}</td>
-                  <td className="td-money" style={{ fontWeight: 600 }}>{r.amount > 0 ? fmtTHB(r.amount) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{r.deduct5 > 0 ? fmtTHB(r.deduct5) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{r.deduct10 > 0 ? fmtTHB(r.deduct10) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)', fontWeight: 700 }}>{r.totalWithholding > 0 ? fmtTHB(r.totalWithholding) : <span style={{ color: 'var(--ink-300)' }}>—</span>}</td>
-                  <td style={{ textAlign: 'center' }}>{r.isPaid ? <span style={{ color: 'var(--emerald-600)', fontSize: 16 }}>✓</span> : ''}</td>
-                  <td style={{ textAlign: 'center' }}>{!r.isPaid ? <span style={{ color: 'var(--danger)', fontSize: 16 }}>✓</span> : ''}</td>
-                  <td style={{ fontSize: 12, color: 'var(--ink-400)', maxWidth: 160 }}>{r.remark}</td>
-                  <td className="no-print">
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn-icon" title="แก้ไข" onClick={() => onEdit(r)}><Icon name="edit" size={15} /></button>
-                      <button className="btn-icon danger" title="ลบ" onClick={() => onDelete(r)}><Icon name="trash" size={15} /></button>
-                    </div>
+              {[...records].reverse().slice(0, rowsToShow).map((r) => (
+                <tr key={r.id} style={{ cursor: 'default' }}>
+                  <td className="num" style={{ color: 'var(--ink-400)' }}>{r.seq}</td>
+                  <td><span style={{ fontWeight: 600 }}>{r.firstName}</span> {r.lastName}</td>
+                  <td style={{ fontSize: 12.5, maxWidth: 200 }}><div className="td-name">{r.topic}</div></td>
+                  <td className="num" style={{ fontSize: 12.5 }}>{r.date}</td>
+                  <td className="td-money" style={{ fontWeight: 600 }}>{r.amount > 0 ? fmtTHB(r.amount) : '—'}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)', fontSize: 13 }}>{r.deduct5 > 0 ? fmtTHB(r.deduct5) : '—'}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)', fontSize: 13 }}>{r.deduct10 > 0 ? fmtTHB(r.deduct10) : '—'}</td>
+                  <td className="td-money" style={{ color: 'var(--gold-700)', fontWeight: 700 }}>{r.totalWithholding > 0 ? fmtTHB(r.totalWithholding) : '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className={'chip ' + (r.isPaid ? 'done' : 'plan')}>{r.isPaid ? 'จ่ายแล้ว' : 'ยังไม่จ่าย'}</span>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={13} style={{ textAlign: 'center', padding: '40px', color: 'var(--ink-300)' }}>ไม่พบข้อมูล</td></tr>
-              )}
             </tbody>
-            {filtered.length > 0 && (
-              <tfoot>
-                <tr style={{ background: 'var(--emerald-50)', fontWeight: 700 }}>
-                  <td colSpan={5} style={{ padding: '10px 18px', color: 'var(--emerald-800)' }}>รวมทั้งสิ้น</td>
-                  <td className="td-money">{fmtTHB(totAmount)}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD5)}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totD10)}</td>
-                  <td className="td-money" style={{ color: 'var(--gold-700)' }}>{fmtTHB(totW)}</td>
-                  <td colSpan={4}></td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       </div>
@@ -138,4 +164,4 @@ function SpeakerList({ records, onAdd, onEdit, onDelete, fiscalYear }) {
   );
 }
 
-Object.assign(window, { SpeakerList });
+Object.assign(window, { SpeakerDashboard });

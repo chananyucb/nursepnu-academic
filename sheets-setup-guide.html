@@ -1,0 +1,151 @@
+/* =====================================================================
+   sheets-db.js — Google Sheets data layer
+   · ถ้า URL ยังไม่ตั้งค่า → ใช้ localStorage เป็น fallback อัตโนมัติ
+   · ถ้าตั้งค่าแล้ว → ทุก read/write ผ่าน Google Apps Script Web App
+   ===================================================================== */
+(function () {
+
+  const LS_PROJECTS = 'nursepnu.projects.v5';
+  const LS_SPEAKERS = 'nursepnu.speakers.v1';
+
+  /* ── Is configured? ──────────────────────────────────────────── */
+  function isConfigured() {
+    return (
+      window.SHEETS_WEBAPP_URL &&
+      window.SHEETS_WEBAPP_URL !== 'PASTE_YOUR_WEBAPP_URL_HERE'
+    );
+  }
+
+  /* ── HTTP helpers ────────────────────────────────────────────── */
+  async function apiFetch(sheet) {
+    const res = await fetch(window.SHEETS_WEBAPP_URL + '?sheet=' + sheet);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'อ่านข้อมูลไม่ได้');
+    return data.data;
+  }
+
+  /* No Content-Type header → browser sends text/plain → simple CORS
+     request (no preflight) → Apps Script returns CORS header → ✅    */
+  async function apiPost(payload) {
+    const res = await fetch(window.SHEETS_WEBAPP_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'บันทึกไม่ได้');
+    return data;
+  }
+
+  /* ── Type coercion (Sheets returns strings for everything) ───── */
+  function coerceProject(r) {
+    return {
+      id:               String(r.id  || ''),
+      year:             Number(r.year) || 0,
+      name:             String(r.name || ''),
+      category:         String(r.category || 'academic'),
+      duration:         String(r.duration || ''),
+      target:           String(r.target   || ''),
+      recipients:       Number(r.recipients) || 0,
+      budget:           Number(r.budget)    || 0,
+      income:           Number(r.income)    || 0,
+      deductUniversity: Number(r.deductUniversity) || 0,
+      deductFaculty:    Number(r.deductFaculty)    || 0,
+      actual:           Number(r.actual)    || 0,
+      remaining:        Number(r.remaining) || 0,
+      owner:            String(r.owner  || ''),
+      status:           String(r.status || 'plan'),
+    };
+  }
+
+  function coerceSpeaker(r) {
+    return {
+      id:               String(r.id || ''),
+      seq:              Number(r.seq) || 0,
+      firstName:        String(r.firstName || ''),
+      lastName:         String(r.lastName  || ''),
+      topic:            String(r.topic     || ''),
+      date:             String(r.date      || ''),
+      venue:            String(r.venue     || ''),
+      amount:           Number(r.amount)           || 0,
+      deduct5:          Number(r.deduct5)           || 0,
+      deduct10:         Number(r.deduct10)          || 0,
+      totalWithholding: Number(r.totalWithholding)  || 0,
+      netAmount:        Number(r.netAmount)         || 0,
+      isPaid:           r.isPaid === true || r.isPaid === 'TRUE' || r.isPaid === 'true',
+      remark:           String(r.remark || ''),
+    };
+  }
+
+  /* ── localStorage fallbacks ──────────────────────────────────── */
+  function lsLoadProjects() {
+    try {
+      const raw = localStorage.getItem(LS_PROJECTS);
+      if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length) return p; }
+    } catch (e) {}
+    return (window.NURSE_DATA?.projects || []).map(p => ({ ...p }));
+  }
+  function lsSaveProjects(list) {
+    try { localStorage.setItem(LS_PROJECTS, JSON.stringify(list)); } catch (e) {}
+  }
+  function lsLoadSpeakers() {
+    try {
+      const raw = localStorage.getItem(LS_SPEAKERS);
+      if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length) return p; }
+    } catch (e) {}
+    return (window.NURSE_SPEAKERS?.records || []).map(r => ({ ...r }));
+  }
+  function lsSaveSpeakers(list) {
+    try { localStorage.setItem(LS_SPEAKERS, JSON.stringify(list)); } catch (e) {}
+  }
+
+  /* ══════════════════════════════════════════════════════════════ */
+  window.db = {
+    isConfigured,
+
+    /* ── Projects ─────────────────────────────────────────────── */
+    async fetchProjects() {
+      if (!isConfigured()) return lsLoadProjects();
+      const rows = await apiFetch('projects');
+      return rows.map(coerceProject);
+    },
+
+    async saveProject(p) {
+      if (!isConfigured()) return;
+      await apiPost({ action: 'upsert', sheet: 'projects', record: p });
+    },
+
+    async deleteProject(id) {
+      if (!isConfigured()) return;
+      await apiPost({ action: 'delete', sheet: 'projects', id });
+    },
+
+    /* ── Speakers ─────────────────────────────────────────────── */
+    async fetchSpeakers() {
+      if (!isConfigured()) return lsLoadSpeakers();
+      const rows = await apiFetch('speaker_records');
+      return rows.map(coerceSpeaker);
+    },
+
+    async saveSpeaker(s) {
+      if (!isConfigured()) return;
+      await apiPost({ action: 'upsert', sheet: 'speaker_records', record: s });
+    },
+
+    async deleteSpeaker(id) {
+      if (!isConfigured()) return;
+      await apiPost({ action: 'delete', sheet: 'speaker_records', id });
+    },
+
+    /* ── Seed sample data ─────────────────────────────────────── */
+    async seedAll() {
+      if (!isConfigured()) throw new Error('ยังไม่ได้ตั้งค่า Web App URL');
+      const pr = (window.NURSE_DATA?.projects  || []).map(p => ({ ...p }));
+      const sp = (window.NURSE_SPEAKERS?.records || []).map(r => ({ ...r }));
+      await apiPost({ action: 'upsertMany', sheet: 'projects',        records: pr });
+      await apiPost({ action: 'upsertMany', sheet: 'speaker_records', records: sp });
+    },
+
+    lsSaveProjects,
+    lsSaveSpeakers,
+  };
+})();
